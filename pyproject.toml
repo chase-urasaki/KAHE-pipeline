@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kahe"
+version = "0.1.0"
+description = "Calibration and analysis tools for Keck/NIRSPEC spectroscopy"
+requires-python = ">=3.10"
+
+dependencies = [
+    "numpy",
+    "astropy",
+    "sys",
+    "shutil",
+    "matplotlib",
+    "os", 
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "jupyter",
+    "matplotlib",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

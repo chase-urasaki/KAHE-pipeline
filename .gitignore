@@ -1,0 +1,57 @@
+# --------------------------------------------------
+# Astronomical data
+# --------------------------------------------------
+*.fits
+*.fit
+*.fts
+*.fits.gz
+*.fit.gz
+*.fts.gz
+
+*.FITS
+*.FIT
+*.FTS
+*.FITS.GZ
+*.FIT.GZ
+*.FTS.GZ
+
+# Common local data and output directories
+data/
+raw/
+calibrations/
+products/
+outputs/
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Package builds
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing and development
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+
+.ipynb_checkpoints/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -33,11 +33,11 @@ def setup_project(project_name: str, output_base: str = ".") -> None:
     
     # Copy blank config template to project root
     template_path = Path(__file__).parent / "template_config.ini"
-    config_output = project_dir / "pipeline_config.ini"
+    config_output = project_dir / f"{project_name}_config.ini"
     
     if template_path.exists():
         shutil.copy(template_path, config_output)
-        print(f"Created pipeline_config.ini")
+        print(f"Created {project_name}_config.ini")
     else:
         print(f"Warning: template not found at {template_path}")
     

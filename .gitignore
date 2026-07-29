@@ -23,6 +23,11 @@ products/
 outputs/
 results/
 
+# Ignore user projects by naming convention
+# Matches: TOI2123_240704, NGC1234_2024-07-15, etc.
+[A-Z]*_[0-9]*
+[A-Z]*_[0-9]*_*/
+
 # Python
 __pycache__/
 *.py[cod]

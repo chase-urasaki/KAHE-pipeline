@@ -25,7 +25,7 @@ Once published to PyPI:
 
 .. code-block:: bash
 
-    pip install kahe
+    pip install kahe-pipeline
 
 Requirements
 ------------

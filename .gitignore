@@ -57,5 +57,5 @@ htmlcov/
 Thumbs.db
 
 # Sphinx and Twine
-docs/
+docs/_build/
 .pypirc

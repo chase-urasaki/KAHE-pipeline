@@ -55,3 +55,7 @@ htmlcov/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Sphinx and Twine
+docs/
+.pypirc

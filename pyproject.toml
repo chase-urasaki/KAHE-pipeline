@@ -22,5 +22,8 @@ dev = [
     "matplotlib",
 ]
 
+[project.scripts]
+kahe-setup = "kahe.setup:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]

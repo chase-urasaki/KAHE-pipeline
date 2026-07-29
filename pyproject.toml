@@ -11,10 +11,8 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "astropy",
-    "sys",
-    "shutil",
     "matplotlib",
-    "os", 
+    "scipy", 
 ]
 
 [project.optional-dependencies]

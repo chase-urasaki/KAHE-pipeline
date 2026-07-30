@@ -5,7 +5,7 @@ from scipy.optimize import curve_fit
 import astropy.stats
 import matplotlib.pyplot as plt
 import time
-from NIRSPEC_CONSTANTS import OVERSCAN_WIDTH
+from kahe.instruments.nirspec import OVERSCAN_WIDTH
 import configparser
 import os
 

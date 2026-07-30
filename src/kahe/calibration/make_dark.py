@@ -12,6 +12,7 @@ import numpy as np
 import astropy.io.fits as fits
 import matplotlib.pyplot as plt
 import astropy.stats
+from kahe.utils.helper_functions import ds9
 
 # Read in config file
 def read_config_file(config_path: str) -> configparser.ConfigParser:
@@ -114,6 +115,9 @@ def combine_darks(darks_dir, std_threshold, min_frames=3, relaxed=False, show_pl
     plt.colorbar()
     plt.show()
 
+    if show_plots:
+        ds9(masterdark)
+    
     return masterdark, std, master_mask
 
 def save_master_dark(masterdark, std, mask, target_name, date):
@@ -143,7 +147,7 @@ def save_master_dark(masterdark, std, mask, target_name, date):
         fits.ImageHDU(np.array(mask, dtype=int), name="MASK")
     ])
     hdul.writeto(output_path, overwrite=True)
-    print(f"✅ Master dark saved to {output_path}")
+    print(f"Master dark saved to {output_path}")
 
 def main():
     """Main entry point for CLI execution."""

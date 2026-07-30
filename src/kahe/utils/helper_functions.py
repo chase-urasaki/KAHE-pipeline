@@ -3,7 +3,7 @@ import astropy.io.fits as fits
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from NIRSPEC_CONSTANTS import READ_NOISE, GAIN, N, OVERSCAN_WIDTH
+from kahe.instruments.nirspec import READ_NOISE, GAIN, N, OVERSCAN_WIDTH
 
 import numpy as np
 import scipy.interpolate
@@ -12,12 +12,16 @@ from scipy.optimize import curve_fit
 import astropy.stats
 import matplotlib.pyplot as plt
 import time
-from NIRSPEC_CONSTANTS import OVERSCAN_WIDTH
-import configparser
 import os
 
-from utils import robust_polyfit
-from utils import fit_gaussian
+from kahe.utils.math import robust_polyfit
+from kahe.utils.math import fit_gaussian
+
+def ds9(a):
+    """ ds9 shrotcut from Mike Bottom"""
+    fits.writeto('temp.fits', np.array(a), overwrite=True)
+    os.system('ds9 temp.fits -zoom to fit &')
+    return
 
 def trace_edge(image, y_at_center, lower_edge=False, right_margin=30, window=10):
     edges = scipy.ndimage.sobel(image, axis=0)

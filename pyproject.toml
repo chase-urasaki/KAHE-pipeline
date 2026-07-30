@@ -39,16 +39,15 @@ Repository = "https://github.com/chase-urasaki/KAHE-pipeline"
 Issues = "https://github.com/chase-urasaki/KAHE-pipeline/issues"
 
 [project.optional-dependencies]
-dev = [
-    "pytest",
-    "jupyter",
-    "matplotlib",
+docs = [
     "sphinx",
     "sphinx-rtd-theme",
     "sphinx-autodoc-typehints",
 ]
-
-docs = [
+dev = [
+    "pytest",
+    "jupyter",
+    "matplotlib",
     "sphinx",
     "sphinx-rtd-theme",
     "sphinx-autodoc-typehints",

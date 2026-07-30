@@ -15,7 +15,7 @@ pip install -e .
 ```
 #### From PyPI 
 ```bash
-pip install kahe
+pip install kahe-pipeline
 ```
 ## Quick Start 
 

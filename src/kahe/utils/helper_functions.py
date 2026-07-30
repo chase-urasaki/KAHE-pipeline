@@ -13,9 +13,25 @@ import astropy.stats
 import matplotlib.pyplot as plt
 import time
 import os
+import configparser
 
 from kahe.utils.math import robust_polyfit
 from kahe.utils.math import fit_gaussian
+
+def read_config_file(config_path: str) -> configparser.ConfigParser:
+    """ Read and parse the pipeline configuration file. 
+    
+    Arguments:
+        config_path (str): Path to the configuration file.
+        
+    Returns:
+        config (configparser.ConfigParser): Parsed configuration object.
+    """
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    config = configparser.ConfigParser()
+    config.read(config_path)
+    return config
 
 def ds9(a):
     """ ds9 shrotcut from Mike Bottom"""

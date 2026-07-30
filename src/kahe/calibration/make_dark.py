@@ -13,22 +13,9 @@ import astropy.io.fits as fits
 import matplotlib.pyplot as plt
 import astropy.stats
 from kahe.utils.helper_functions import ds9
+from kahe.utils.helper_functions
+from kahe.utils.helper_functions import read_config_file
 
-# Read in config file
-def read_config_file(config_path: str) -> configparser.ConfigParser:
-    """ Read and parse the pipeline configuration file. 
-    
-    Arguments:
-        config_path (str): Path to the configuration file.
-        
-    Returns:
-        config (configparser.ConfigParser): Parsed configuration object.
-    """
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    config = configparser.ConfigParser()
-    config.read(config_path)
-    return config
 
 def get_dark_params_from_config(config: configparser.ConfigParser) -> Tuple[str, float, str, str]:
     """ Extract dark frame parameters from the configuration.

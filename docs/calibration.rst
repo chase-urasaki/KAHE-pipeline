@@ -22,6 +22,18 @@ Functions
 
 Flat Field Generation
 ---------------------
+.. automodule:: kahe.calibration.make_flat
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Functions
+^^^^^^^^^
+.. autofunction: kahe.calibration.make_flat.get_flat_params_from_config
+
+.. autofunction:: kahe.calibration.make_flat.combine_flats
+
+.. autofunction:: kahe.calibration.make_flat.trace_edges
 
 .. automodule:: kahe.calibration.make_flat
    :members:

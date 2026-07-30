@@ -15,6 +15,7 @@ Calibration and analysis tools for Keck/NIRSPEC spectroscopy.
    quickstart
    installation
    configuration
+   calibration
 
 .. toctree::
    :maxdepth: 2

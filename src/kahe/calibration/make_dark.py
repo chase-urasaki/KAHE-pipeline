@@ -13,7 +13,6 @@ import astropy.io.fits as fits
 import matplotlib.pyplot as plt
 import astropy.stats
 from kahe.utils.helper_functions import ds9
-from kahe.utils.helper_functions
 from kahe.utils.helper_functions import read_config_file
 
 

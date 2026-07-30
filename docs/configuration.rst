@@ -34,7 +34,7 @@ From ExoFOP, NASA Exoplanet Archive, or literature:
 .. code-block:: ini
 
     [Planet Parameters]
-    name = b
+    name = b              # a, b, c, etc
     T_c = 59691.31982     # Time of conjunction (MJD)
     T_dur = 3.473         # Transit duration (hours)
     P = 10.3088372        # Orbital period (days)
@@ -63,3 +63,17 @@ Select the sigma threshold for pixel masking:
     Flat  = 5
     cosmic_ray_sigma = 5
 
+Filters
+-------
+Select which filter and order to use for the analysis:
+Options are: 
+- NIRSPEC1_70
+    - Order 70 of NIRSPEC1 (old or new y-band)
+
+- NIRSPECHEI_1
+    - He narrowband filter 
+
+.. code-block:: ini
+
+    [Filters]
+    filter = NIRSPEC1_70 

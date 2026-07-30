@@ -1,28 +1,59 @@
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "kahe"
+name = "kahe-pipeline"
 version = "0.1.0"
 description = "Calibration and analysis tools for Keck/NIRSPEC spectroscopy"
+readme = "README.md"  # ADD THIS
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Chase Urasaki", email = "chasemu@hawaii.edu"},
+    {name = "Michael Zhang", email = "zmzhang@uchicago.edu"}
+]
+classifiers = [  # ADD THIS
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+keywords = ["astronomy", "spectroscopy", "NIRSPEC", "calibration"]
 
 dependencies = [
     "numpy",
     "astropy",
-    "sys",
-    "shutil",
     "matplotlib",
-    "os", 
+    "scipy", 
 ]
+
+[project.urls]
+Homepage = "https://github.com/chase-urasaki/KAHE-pipeline"
+Repository = "https://github.com/chase-urasaki/KAHE-pipeline"
+Issues = "https://github.com/chase-urasaki/KAHE-pipeline/issues"
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "jupyter",
     "matplotlib",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-typehints",
 ]
+
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-typehints",
+]
+[project.scripts]
+kahe-setup = "kahe.setup:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+kahe = ["template_config.ini"]

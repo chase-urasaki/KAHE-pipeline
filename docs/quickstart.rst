@@ -46,6 +46,12 @@ Specifiy the dark frame path in the ``pipeline_config.ini`` file and run:
 
     kahe-make-flat pipeline_config.ini
 
+It may be the case that your flat looks something like this: 
+
+This means that the bounds are no longer set correctly. Perfectly normal, as it happens when the the echelle and cross disperser are not in the same position as before. You can fix this by going into the ``fix_flat`` notebook.
+When this happens, you will need to re-run the ``kahe-make-flat`` command after fixing the flat. and change the value in the nirspec.py file 
+TODO: fix this so it can be set in the config file.
+
 Extract Spectra
 ---------------
 

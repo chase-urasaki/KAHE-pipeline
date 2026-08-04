@@ -130,7 +130,7 @@ def fit_and_divide(masterflat, top_edges, bot_edges, X_ORD=5, Y_ORD=3):
     print('Fitting and dividing...')
     normalization = np.ones(masterflat.shape) * np.inf
     for o in range(len(top_edges)):
-        top_edge = top_edges[o]
+        top_edge = top_edges[o]-10
         bot_edge = bot_edges[o]
         #if o == 0: top_edge += 10 #Hack
                     
@@ -229,7 +229,7 @@ def trace_edges(masterflat, FILTER=None, window=10, percentile=98,
 
         # Compute the vertical profile at the center columns
         midsection = np.median(edges[:, int(N/2 - window) : int(N/2 + window)], axis=1)
-        # quarter_section_left = np.median(edges[:, int(N/4 - window) : int(N/4 + window)], axis=1)
+        #quarter_section_left = np.median(edges[:, int(N/4 - window) : int(N/4 + window)], axis=1)
         # quarter_section_right = np.median(edges[:, int(N*3/4 - window) : int(N*3/4 + window)], axis=1)
 
         upper_positions = scipy.signal.find_peaks(midsection,
@@ -305,6 +305,7 @@ def save_master_flat(masterflat: np.ndarray, bad_pixels: np.ndarray,
                      normalization: np.ndarray, target_name: str, date: str,
                      output_dir: str = "./cals") -> None:
     """Save master flat to FITS file with all extensions.
+        optional save to a png for quick viewing.
     
     Arguments:
         masterflat: Normalized master flat frame
@@ -387,15 +388,16 @@ def main():
     
     # Parse orders argument
     orders_param = None
-    if args.orders:
-        if args.orders.lower() == "all":
+    if args.orders is not None:
+        orders_arg = args.orders.strip()
+        if orders_arg.lower() == "all":
             orders_param = "all"
-        elif "," in args.orders:
+        elif "," in orders_arg:
             # Multiple orders
-            orders_param = [int(x.strip()) for x in args.orders.split(",")]
+            orders_param = [int(x.strip()) for x in orders_arg.split(",")]
         else:
             # Single order
-            orders_param = int(args.orders)
+            orders_param = int(orders_arg)
     # If not specified, defaults to None (trace all orders)
     
     # Read config
@@ -431,11 +433,20 @@ def main():
         return 1
     
     # Trace edges
+    trace_filter = FILTER
+    trace_orders = orders_param
+
+    # For NIRSPEC1_70, order 70 is typically the 3rd order from the end.
+    if orders_param is None and FILTER == nirspec.NIRSPEC1_70:
+        trace_filter = None
+        trace_orders = -3
+        print("Auto-selecting order -3 (third from end) for NIRSPEC1_70")
+
     top_edges, bottom_edges = trace_edges(
         raw_masterflat,
-        FILTER=FILTER,
+        FILTER=trace_filter,
         show_plots=not args.no_plots,
-        orders=orders_param
+        orders=trace_orders
     )
     
     # Interpolate bad pixels from dark
@@ -474,14 +485,16 @@ def main():
         plt.colorbar(im3, ax=axes[2])
         
         plt.tight_layout()
+        fig.savefig(f"./{target_name}_{date}/cals/_masterflat_summary.png", dpi=600)
         plt.show()
+       
     
     # Save result
     save_master_flat(
         masterflat, is_bad_pixel, (top_edges, bottom_edges),
         mask, raw_masterflat, raw_std, normalization,
         target_name, date,
-        output_dir=f"{target_name}_{date}/cals"
+        output_dir=f"{target_name}_{date}/cals", 
     )
     
     print(" Master flat generation complete!")

@@ -200,7 +200,7 @@ def identify_anomalous_gains(masterflat, bad_pixel_map, top_edges, bottom_edges,
 
 
 
-def trace_edges(masterflat, FILTER=None, window=10, percentile=98, 
+def trace_edges(masterflat, FILTER=None, window=10, percentile=99, 
                 show_plots=True, orders=None):
     """Trace spectral order edges in the master flat.
     
@@ -229,75 +229,143 @@ def trace_edges(masterflat, FILTER=None, window=10, percentile=98,
 
         # Compute the vertical profile at the center columns
         midsection = np.median(edges[:, int(N/2 - window) : int(N/2 + window)], axis=1)
-        #quarter_section_left = np.median(edges[:, int(N/4 - window) : int(N/4 + window)], axis=1)
-        # quarter_section_right = np.median(edges[:, int(N*3/4 - window) : int(N*3/4 + window)], axis=1)
+        quarter_section_left = np.median(edges[:, int(N/4 - window) : int(N/4 + window)], axis=1)
+        quarter_section_right = np.median(edges[:, int(N*3/4 - window) : int(N*3/4 + window)], axis=1)
 
-        upper_positions = scipy.signal.find_peaks(midsection,
+        upper_positions_mid = scipy.signal.find_peaks(midsection,
                                                   height=np.percentile(midsection, percentile),
                                                   distance=MIN_ORDER_SEPARATION)[0]
-        lower_positions = scipy.signal.find_peaks(-midsection,
+        lower_positions_mid = scipy.signal.find_peaks(-midsection,
                                                   height=np.percentile(-midsection, percentile),
                                                   distance=MIN_ORDER_SEPARATION)[0]
+        upper_positions_left = scipy.signal.find_peaks(quarter_section_left,
+                                                  height=np.percentile(quarter_section_left, percentile),
+                                                  distance=MIN_ORDER_SEPARATION)[0]
+        lower_positions_left = scipy.signal.find_peaks(-quarter_section_left,
+                                                  height=np.percentile(-quarter_section_left, percentile),
+                                                  distance=MIN_ORDER_SEPARATION)[0]
 
-        print(f"  Found {len(upper_positions)} upper positions: {upper_positions}")
-        print(f"  Found {len(lower_positions)} lower positions: {lower_positions}")
+        upper_positions_right = scipy.signal.find_peaks(quarter_section_right,
+                                                  height=np.percentile(quarter_section_right, percentile),
+                                                  distance=MIN_ORDER_SEPARATION)[0]
+        lower_positions_right = scipy.signal.find_peaks(-quarter_section_right,
+                                                  height=np.percentile(-quarter_section_right, percentile),
+                                                  distance=MIN_ORDER_SEPARATION)[0]
+        # Top edges # Skip order 68 We can reliably extract 6 orders 
+        available_orders = [69, 70, 71, 72, 73, 74]
+        # Make a dictionary object to store the positions of the edges for each order. 68 corresponds to -1 (i.e. the last order)
+        edge_positions = {}
+        for i, order in enumerate(available_orders):
+            edge_positions[order] = -(len(available_orders) - i)
         
-        if show_plots:
-            plt.figure(figsize=(12, 6))
-            plt.imshow(masterflat, origin='lower', aspect='auto', cmap='gray')
-            plt.title("Master Flat with Edge Traces")
-            plt.colorbar(label='Counts')
+        # Now edge_positions = {69: -6, 70: -5, 71: -4, 72: -3, 73: -2, 74: -1}
 
-            for pos in upper_positions:
-                plt.axhline(pos, color='lime', linestyle='--', lw=1)
-            for pos in lower_positions:
-                plt.axhline(pos, color='magenta', linestyle='--', lw=1)
+        # If you want 68 to be -1 (last), reverse the mapping:
+        for i, order in enumerate(available_orders):
+            edge_positions[order] = -(i + 1)
+        # Now edge_positions = {69: -1, 70: -2, 71: -3, 72: -4, 73: -5, 74: -6}
 
-            plt.xlabel("X (columns)")
-            plt.ylabel("Y (rows)")
-            plt.tight_layout()
-            plt.show()
+        xs = [N/4, N/2, N*3/4]
+        # Look up the requested order positions from the function call: 
+        orders = available_orders if orders is None else orders
 
-    else:
-        # Use filter bounds if provided
-        bounds = FILTER
-        if len(bounds) == 2:
-            upper_positions = np.array([bounds[0]])
-            lower_positions = np.array([bounds[1]])
+        # Normalize orders to always be a list
+        if isinstance(orders, int):
+            orders = [orders]
 
-    # Determine which orders to trace
-    num_orders = min(len(upper_positions), len(lower_positions))
+        # Convert negative indices to actual order numbers
+        orders_resolved = []
+        for order in orders:
+            if order < 0:
+                # Negative index means "from the end" of available_orders
+                orders_resolved.append(available_orders[order])
+            else:
+                orders_resolved.append(order)
+
+        # Get the index corresponding to the requested order
+        order_index = [edge_positions[order] for order in orders_resolved]
+
+        for index in order_index: 
+            ys_upper = [upper_positions_left[index-1], upper_positions_mid[index], upper_positions_right[index]]
+            # asser difference in y vals are less than ~20 (otherwise we're jumping orders)
+            assert all(abs(ys_upper[i] - ys_upper[i-1]) < 20 for i in range(1, len(ys_upper))), "Detected order positions differ by more than 20 pixels. Check edge detection."
+            ys_lower = [lower_positions_left[index-1], lower_positions_mid[index], lower_positions_right[index]]
+
+            # Trace edges based on detected positions
+            upper_edges = trace_edge(masterflat, ys_upper, xs, lower_edge=False)
+            lower_edges = trace_edge(masterflat, ys_lower, xs, lower_edge=True)
+
+            if show_plots:
+                plt.imshow(masterflat, origin='lower', aspect='auto', cmap='gray')
+                plt.title("Master Flat with Detected Edge Positions")
+                plt.plot(upper_edges, color='lime', label='Upper Edge Trace')
+                plt.plot(lower_edges, color='magenta', label='Lower Edge Trace')
+                plt.colorbar(label='Counts')
+                plt.xlabel("X (columns)")
+                plt.ylabel("Y (rows)")
+                plt.legend()
+                plt.tight_layout()
+                plt.show()
+
+        return np.array([upper_edges]), np.array([lower_edges])
+
+    # Trace edges based on detected positions
+        
+    #     if show_plots:
+    #         plt.figure(figsize=(12, 6))
+    #         plt.imshow(masterflat, origin='lower', aspect='auto', cmap='gray')
+    #         plt.title("Master Flat with Edge Traces")
+    #         plt.colorbar(label='Counts')
+
+    #         for pos in upper_positions:
+    #             plt.axhline(pos, color='lime', linestyle='--', lw=1)
+    #         for pos in lower_positions:
+    #             plt.axhline(pos, color='magenta', linestyle='--', lw=1)
+
+    #         plt.xlabel("X (columns)")
+    #         plt.ylabel("Y (rows)")
+    #         plt.tight_layout()
+    #         plt.show()
+
+    # else:
+    #     # Use filter bounds if provided
+    #     bounds = FILTER
+    #     if len(bounds) == 2:
+    #         upper_positions = np.array([bounds[0]])
+    #         lower_positions = np.array([bounds[1]])
+
+    # # Determine which orders to trace
+    # num_orders = min(len(upper_positions), len(lower_positions))
     
-    if orders is None or orders == "all":
-        # Trace all detected orders
-        order_indices = list(range(num_orders))
-    elif isinstance(orders, int):
-        # Single order by index
-        order_indices = [orders if orders >= 0 else num_orders + orders]
-    elif isinstance(orders, (list, tuple)):
-        # Specific orders by indices
-        order_indices = [idx if idx >= 0 else num_orders + idx for idx in orders]
-    else:
-        raise ValueError(f"Invalid orders parameter: {orders}")
+    # if orders is None or orders == "all":
+    #     # Trace all detected orders
+    #     order_indices = list(range(num_orders))
+    # elif isinstance(orders, int):
+    #     # Single order by index
+    #     order_indices = [orders if orders >= 0 else num_orders + orders]
+    # elif isinstance(orders, (list, tuple)):
+    #     # Specific orders by indices
+    #     order_indices = [idx if idx >= 0 else num_orders + idx for idx in orders]
+    # else:
+    #     raise ValueError(f"Invalid orders parameter: {orders}")
     
-    # Validate indices
-    for idx in order_indices:
-        if idx < 0 or idx >= num_orders:
-            raise ValueError(f"Order index {idx} out of range [0, {num_orders-1}]")
+    # # Validate indices
+    # for idx in order_indices:
+    #     if idx < 0 or idx >= num_orders:
+    #         raise ValueError(f"Order index {idx} out of range [0, {num_orders-1}]")
     
-    print(f"  Tracing {len(order_indices)} order(s): {order_indices}")
+    # print(f"  Tracing {len(order_indices)} order(s): {order_indices}")
     
-    # Trace the selected orders
-    upper_edges = []
-    lower_edges = []
+    # # Trace the selected orders
+    # upper_edges = []
+    # lower_edges = []
     
-    for o in order_indices:
-        print(f"    Tracing order {o}...")
-        upper_edges.append(trace_edge(masterflat, upper_positions[o], False))
-        lower_edges.append(trace_edge(masterflat, lower_positions[o], True))
+    # for o in order_indices:
+    #     print(f"    Tracing order {o}...")
+    #     upper_edges.append(trace_edge(masterflat, upper_positions[o], False))
+    #     lower_edges.append(trace_edge(masterflat, lower_positions[o], True))
 
-    return np.array(upper_edges), np.array(lower_edges)
-
+    # return np.array(upper_edges), np.array(lower_edges)
 
 def save_master_flat(masterflat: np.ndarray, bad_pixels: np.ndarray, 
                      edges: Tuple[np.ndarray, np.ndarray], mask: np.ndarray,
@@ -434,13 +502,13 @@ def main():
     
     # Trace edges
     trace_filter = FILTER
-    trace_orders = orders_param
+    trace_orders = orders_param  # Use whatever was specified (or parsed from CLI)
 
-    # For NIRSPEC1_70, order 70 is typically the 3rd order from the end.
+    # For NIRSPEC1_70, if no order specified, auto-select order 70
     if orders_param is None and FILTER == nirspec.NIRSPEC1_70:
         trace_filter = None
-        trace_orders = -3
-        print("Auto-selecting order -3 (third from end) for NIRSPEC1_70")
+        trace_orders = [70]
+        print("Auto-selecting order 70 for NIRSPEC1_70")
 
     top_edges, bottom_edges = trace_edges(
         raw_masterflat,

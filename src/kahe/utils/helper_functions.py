@@ -39,64 +39,63 @@ def ds9(a):
     os.system('ds9 temp.fits -zoom to fit &')
     return
 
-def trace_edge(image, y_at_center, lower_edge=False, right_margin=30, window=10):
+def trace_edge(image, y_positions, x_positions, lower_edge=False, right_margin=30, window=10):
+    """
+    Trace an order edge using three known positions to create an initial fit.
+    
+    Args:
+        image: The flat field image
+        y_positions: List of 3 y-positions [left, mid, right] for the edge
+        x_positions: List of 3 x-positions [left, mid, right] where y_positions were detected
+        lower_edge: True if tracing a lower edge (flips edge detection)
+        right_margin: Pixels to exclude from right edge
+        window: Search window size around expected position
+    
+    Returns:
+        fitted_edge_positions: Polynomial fit of the traced edge
+    """
+    # Create edge-detected image
     edges = scipy.ndimage.sobel(image, axis=0)
-    if lower_edge: edges *= -1
+    if lower_edge: 
+        edges *= -1
     edges[edges < 0] = 0
     edges[0:OVERSCAN_WIDTH + 2] = 0
+    
     columns = np.arange(image.shape[1])
     edge_positions = np.ma.MaskedArray(np.zeros(len(columns)))
-
-    prev_pos = y_at_center
-    for c in np.arange(int(image.shape[1]/2), image.shape[1]):
-        if c > len(columns) - right_margin: 
+    
+    # Create initial polynomial fit from the three known positions
+    # This gives us a prior for where the edge should be at each column
+    initial_poly_coeffs = np.polyfit(x_positions, y_positions, 2)
+    initial_fit = np.polyval(initial_poly_coeffs, columns)
+    
+    # Trace all columns using the initial fit as a guide
+    for c in columns:
+        if c > len(columns) - right_margin - 1:
             edge_positions[c] = np.ma.masked
             continue
-
-        y_lower = max(0, int(prev_pos - window))
-        y_upper = min(int(prev_pos + window), image.shape[0] - 1)
+        
+        # Use the initial polynomial fit as the expected position
+        expected_pos = initial_fit[c]
+        
+        y_lower = max(0, int(expected_pos - window))
+        y_upper = min(int(expected_pos + window), image.shape[0] - 1)
         ys = np.arange(y_lower, y_upper)
         
         try:
             coeffs, _, gaussian = fit_gaussian(ys, edges[y_lower : y_upper, c])
-            if np.abs(coeffs[1] - prev_pos) > 1 and c != int(image.shape[1]/2):
+            # Check if the detected position is reasonably close to expected
+            if np.abs(coeffs[1] - expected_pos) > 2 * window:
                 edge_positions[c] = np.ma.masked
                 continue
             
             edge_positions[c] = coeffs[1]
-            prev_pos = edge_positions[c]
-        except RuntimeError:
+        except (RuntimeError, ValueError):
             edge_positions[c] = np.ma.masked
-
-    prev_pos = y_at_center
-    for c in np.arange(int(image.shape[1]/2), 0, -1):
-        y_lower = max(0, int(prev_pos - window))
-        y_upper = min(int(prev_pos + window), image.shape[0] - 1)
-        ys = np.arange(y_lower, y_upper)
-        
-        try:
-            coeffs, _, gaussian = fit_gaussian(ys, edges[y_lower : y_upper, c])
-            if np.abs(coeffs[1] - prev_pos) > 1 and c != int(image.shape[1]/2):
-                edge_positions[c] = np.ma.masked
-                continue
-            
-            edge_positions[c] = coeffs[1]
-            prev_pos = edge_positions[c]
-        except RuntimeError:
-            edge_positions[c] = np.ma.masked
-            
-    #plt.plot(columns, edge_positions)
     
+    # Final polynomial fit using all detected positions
     fitted_edge_positions = robust_polyfit(columns, edge_positions, 2)
-    '''plt.imshow(image)
-    plt.axhline(y_lower, color='black')
-    plt.axhline(y_upper, color='black')
-    if lower_edge:
-        plt.plot(fitted_edge_positions, color='g')
-    else:
-        plt.plot(fitted_edge_positions, color='r')
-    plt.show()'''
-
+    
     return fitted_edge_positions
 
 def fit_gaussian(xs, ys, errors=None, std_guess=1):

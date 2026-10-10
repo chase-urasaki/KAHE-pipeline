@@ -190,3 +190,168 @@ def subtract_overscan(image, width=4):
         if r % 128 == 0 or r % 128 == 64:
             image[r] -= row_biases[r]
     return image
+
+
+class NestedInterpolator:
+    def __init__(self, target_xs, xs, data, ancestor=None):
+        self.target_xs = target_xs
+        
+        if ancestor is not None:
+            self.xs = xs #ancestor.xs
+            self.data = data #ancestor.data
+            transform = self.get_transform()
+            self.transform = self.merge_transforms(ancestor.transform, transform)
+
+            self.xs = ancestor.xs
+            self.data = ancestor.data
+        else:
+            self.xs = xs
+            self.data = data
+            self.transform = self.get_transform()
+
+    def get_transform(self):
+        target_xs = np.atleast_1d(self.target_xs)
+        locations = np.searchsorted(self.xs, target_xs)
+        transform = []
+        
+        for i in range(len(target_xs)):
+            if locations[i] == 0:
+                transform.append([[0, 1]])
+            elif locations[i] == len(self.xs):
+                transform.append([[len(self.xs) - 1, 1]])
+            else:
+                right = locations[i]
+                left = right - 1
+                assert(self.xs[left] <= target_xs[i] and self.xs[right] >= target_xs[i])
+                dist = self.xs[right] - self.xs[left]
+                right_weight = (target_xs[i] - self.xs[left]) / dist
+                left_weight = (self.xs[right] - target_xs[i]) / dist
+                #print(i, left, left_weight, right, right_weight)
+                transform.append([[left, left_weight], [right, right_weight]])
+
+        return transform
+
+    def evaluate(self):
+        transform = self.transform
+        transformed = []
+        for i in range(len(transform)):
+            val = 0.
+            for j in range(len(transform[i])):
+                index, weight = transform[i][j]
+                val += weight * self.data[index]
+            transformed.append(val)
+        return np.array(transformed)
+
+    def merge_transforms(self, first, second):
+        combined = []
+        for i in range(len(second)):
+            combined.append([])
+            index_dict = {}
+            for first_index, first_weight in second[i]:
+                for original_index, original_weight in first[first_index]:
+                    if original_index not in index_dict:
+                        combined[-1].append([original_index, first_weight * original_weight])
+                        index_dict[original_index] = len(combined[-1]) - 1
+                    else:
+                        loc = index_dict[original_index]
+                        combined[-1][loc][1] += first_weight * original_weight
+                    
+        #for i in range(len(combined)):
+        #    print(i, np.array(combined[i]).shape)
+
+        return combined
+    
+    #@profile
+    def get_matrix(self, errors=None):
+        transform = self.transform
+        if errors is None:
+            errors = np.ones(len(self.data))
+        #transform = np.array(transform)
+        contributions = np.zeros((len(transform), len(self.data)))
+        for i in range(len(transform)):
+            indices, weights = np.array(transform[i]).T
+            indices = np.array(indices, dtype=int)
+            #print(indices, weights)
+            contributions[i][indices] = weights
+
+        #import pdb
+        #pdb.set_trace()
+        covariances = contributions.dot(np.diag(errors**2).dot(contributions.T))
+        #covariances += np.random.normal(0, 1e-10, covariances.shape)
+        '''plt.plot(np.sum(contributions, axis=0))
+        plt.plot(np.sum(contributions, axis=1))
+
+        plt.figure()
+        plt.imshow(contributions)
+        plt.figure()
+        plt.imshow(covariances)
+        plt.figure()
+        plt.imshow(np.linalg.inv(covariances))
+        plt.figure()
+        plt.imshow(np.linalg.pinv(covariances))
+        plt.show()
+        #plt.imshow(contributions)
+        #plt.show()'''
+        return covariances
+        
+        plt.imshow(contributions.dot(np.diag(contributions.shape[1] * [1.0]).dot(contributions.T)))
+        plt.figure()
+        #plt.imshow(contributions)
+        plt.imshow(covariances)
+        plt.figure()
+        plt.imshow(np.linalg.inv(covariances))
+        #plt.imshow(contributions)
+        plt.show()
+
+'''np.random.seed(1337)
+data = np.random.normal(0, 1, 213)
+xs = np.arange(213)
+
+target_xs = np.linspace(1, 210, 230)
+#target_xs = np.array([1.5, 2.9, 5.8, 5.9, 6.0, 6.1, 6.2])
+interpolator = NestedInterpolator(target_xs, xs, data)
+covariances = interpolator.get_matrix()
+interpolated = interpolator.evaluate()
+
+print(np.allclose(interpolated, np.interp(target_xs, xs, data)))
+
+#plt.plot(target_xs, interpolated)
+#plt.plot(target_xs, np.interp(target_xs, xs, data))
+#plt.show()
+
+print(interpolated.T.dot(scipy.linalg.solve(covariances, interpolated)),
+      interpolated.T.dot(np.linalg.pinv(covariances).dot(interpolated)))
+
+second_target_xs = np.linspace(1.1, 205, 250)
+#second_target_xs = [1.8, 3.2, 5, 5.5, 6.05]
+second_interpolator = NestedInterpolator(second_target_xs, target_xs, interpolated, interpolator)
+second_interpolator.get_matrix()
+second_interpolated = second_interpolator.evaluate()
+
+plt.plot(second_target_xs, second_interpolated)
+plt.plot(second_target_xs, np.interp(second_target_xs, target_xs, interpolated))
+plt.title("Second comparison")
+plt.show()
+
+covariances = second_interpolator.get_matrix()
+
+print("Condition number", scipy.linalg.norm(covariances) * scipy.linalg.norm(np.linalg.pinv(covariances)))
+sign, slogdet = np.linalg.slogdet(covariances)
+print("Sign, slogdet", sign, slogdet)
+ln_L = -0.5 * (second_interpolated.T.dot(np.linalg.pinv(covariances).dot(second_interpolated)) + sign * slogdet + len(covariances) * np.log(2*np.pi))
+
+print(second_interpolated.T.dot(scipy.linalg.solve(covariances, second_interpolated)),
+      second_interpolated.T.dot(np.linalg.pinv(covariances).dot(second_interpolated)), ln_L)
+
+#second_interpolated = second_interpolator.apply_transform(second_transform)
+#second_interpolated_alt = interpolator.apply_transform(combined)
+#interpolator.get_matrix(combined)
+#print(second_interpolated)
+#print(second_interpolated_alt)
+
+plt.plot(xs, data)
+#plt.plot(target_xs, interpolated)
+plt.plot(second_target_xs, second_interpolated)
+#plt.plot(second_target_xs, second_interpolated_alt)
+plt.show()
+'''

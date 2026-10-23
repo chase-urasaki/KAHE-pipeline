@@ -1,4 +1,6 @@
 
+import wave
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -6,40 +8,49 @@ from pathlib import Path
 from scipy.signal import iirnotch, filtfilt
 from scipy.stats import median_abs_deviation
 
+from kahe.data import Spectrum1D
+
+from kahe.lines import TRIPLET_LINES, PASCHEN_LINES
+
 from kahe.utils.helper_functions import NestedInterpolator
+
+def make_spectra_list(input_directory, skip=None): 
+    """
+    Generate a list of spectra filenames from the input directory. 
+
+    Optionally skip certain files.
+
+    """
 
 
 def interpolate_to_common_wavelength(
-    list_of_spectra,
-    config,
-    plot=True,
-    apply_notch=True,
-    wavelength_min=1.081,
-    wavelength_max=1.085,
+    spectra: list[Spectrum1D],
+    grid_res: float = 112_500,
+    wavelength_min: float = 1.080,
+    wavelength_max: float = 1.096,
+    high_error: float = 1e10,
+    plot: bool = False,
 ):
     """
-    Interpolate extracted 1D spectra onto a common logarithmic
-    wavelength grid.
-
-    Optionally apply a notch filter to remove fringing.
+    Interpolate calibrated 1D spectra onto a common
+    logarithmic wavelength grid.
 
     Parameters
     ----------
-    list_of_spectra : list of str
-        Filenames of extracted, calibrated 1D spectra.
+    spectra : list of Spectrum1D
+        List of extracted, wavelength-calibrated spectra.
 
-    config : configparser.ConfigParser
-        Target configuration loaded from an INI file.
+    grid_res : float
+        Inverse logarithmic wavelength spacing.
 
-    plot : bool, optional
-        Plot the interpolated spectra. Default is True.
-
-    apply_notch : bool, optional
-        Apply the original two-pass notch filter.
-        Default is True.
-
-    wavelength_min, wavelength_max : float, optional
+    wavelength_min, wavelength_max : float
         Wavelength limits in microns.
+
+    high_error : float
+        Uncertainty assigned to flagged pixels.
+
+    plot : bool
+        Whether to plot interpolated spectra.
 
     Returns
     -------
@@ -47,38 +58,38 @@ def interpolate_to_common_wavelength(
         Common logarithmic wavelength grid.
 
     spectra_grid : ndarray
-        Interpolated spectra, shape (n_spectra, n_pixels).
+        Interpolated flux, shape (n_spectra, n_pixels).
 
     error_grid : ndarray
         Interpolated uncertainties.
 
     all_interpolators : list
-        NestedInterpolator objects for each spectrum.
+        Original NestedInterpolator objects.
 
     original_rel_errors : list
-        Original uncertainties with bad pixels flagged.
+        Input uncertainties with zero-flux pixels flagged.
 
     amplitudes : ndarray
-        Median flux of each original spectrum.
+        Median flux for each input spectrum.
     """
-    # Read the configuratiion File
-    name = config["Target"]["name"]
-    date = config["Target"]["date"]
-    method = config["Extraction Method"]["Method"]
 
-    grid_res = config.getfloat("Analysis", "GRID_RES")
-    high_error = config.getfloat("Analysis", "HIGH_ERROR")
+    if not spectra:
+        raise ValueError("No spectra provided.")
 
-    input_directory = Path(
-        f"all_spectra_{name}_{date}_{method}"
-    )
+    if grid_res <= 0:
+        raise ValueError("grid_res must be positive.")
 
-    if not input_directory.is_dir():
-        raise FileNotFoundError(
-            f"Input directory does not exist: {input_directory}"
+    if wavelength_min <= 0 or wavelength_max <= wavelength_min:
+        raise ValueError("Invalid wavelength limits.")
+
+    frames = {s.frame for s in spectra}
+
+    if len(frames) != 1:
+        raise ValueError(
+            "All spectra must share a wavelength reference frame."
         )
 
-    # Construct common logarithmic wavelength grid
+    # Common logarithmic wavelength grid
     lambda_grid = np.exp(
         np.arange(
             np.log(wavelength_min),
@@ -86,10 +97,6 @@ def interpolate_to_common_wavelength(
             1.0 / grid_res,
         )
     )
-
-    # --------------------------------------------------
-    # 3. Initialize output containers
-    # --------------------------------------------------
 
     spectra_grid = []
     error_grid = []
@@ -100,88 +107,44 @@ def interpolate_to_common_wavelength(
     if plot:
         fig, ax = plt.subplots(figsize=(10, 4), dpi=150)
 
-    # --------------------------------------------------
-    # 4. Load and interpolate individual spectra
-    # --------------------------------------------------
+    for spectrum in spectra:
 
-    for filename in list_of_spectra:
+        wavelengths = spectrum.wavelength
+        flux = spectrum.flux
+        errors = spectrum.error
 
-        if not filename:
-            continue
-
-        filepath = input_directory / filename
-
-        if not filepath.is_file():
-            raise FileNotFoundError(
-                f"Spectrum not found: {filepath}"
-            )
-
-        (
-            orders,
-            _,
-            wavelengths,
-            spectra,
-            errors,
-            continuum,
-        ) = np.loadtxt(
-            filepath,
-            unpack=True,
-            skiprows=1,
-        )
-
-        # Ensure wavelengths are sorted for interpolation
-        sort_idx = np.argsort(wavelengths)
-
-        wavelengths = wavelengths[sort_idx]
-        spectra = spectra[sort_idx]
-        errors = errors[sort_idx]
-
-        # Preserve original bad-pixel treatment
+        # Original bad-pixel convention
         relative_errors = errors.copy()
-        relative_errors[spectra == 0] = high_error
-
+        relative_errors[flux == 0] = high_error
         original_rel_errors.append(relative_errors)
 
-        # Construct the original nested interpolator
+        # Preserve original interpolator
         interpolator = NestedInterpolator(
             lambda_grid,
             wavelengths,
-            spectra,
+            flux,
         )
 
         all_interpolators.append(interpolator)
 
-        # Preserve original median-flux measurement
-        amplitudes.append(np.median(spectra))
+        amplitudes.append(np.median(flux))
 
-        # Interpolate flux and uncertainty
+        # Interpolate flux and errors
         flux_interp = np.interp(
             lambda_grid,
             wavelengths,
-            spectra,
+            flux,
+            left=np.nan,
+            right=np.nan,
         )
 
         error_interp = np.interp(
             lambda_grid,
             wavelengths,
             errors,
+            left=np.nan,
+            right=np.nan,
         )
-
-        # ----------------------------------------------
-        # 5. Optional notch filtering
-        # ----------------------------------------------
-
-        if apply_notch:
-
-            b, a = iirnotch(
-                w0=0.052,
-                Q=15,
-                fs=1,
-            )
-
-            # Preserve original two-pass filtering
-            flux_interp = filtfilt(b, a, flux_interp)
-            flux_interp = filtfilt(b, a, flux_interp)
 
         spectra_grid.append(flux_interp)
         error_grid.append(error_interp)
@@ -194,23 +157,14 @@ def interpolate_to_common_wavelength(
                 linewidth=0.8,
             )
 
-    # --------------------------------------------------
-    # 6. Convert outputs to arrays
-    # --------------------------------------------------
-
     spectra_grid = np.asarray(spectra_grid)
     error_grid = np.asarray(error_grid)
     amplitudes = np.asarray(amplitudes)
 
-    # --------------------------------------------------
-    # 7. Plot formatting
-    # --------------------------------------------------
-
     if plot:
-        ax.set_title(f"Reduced Spectra for {name}")
-        ax.set_xlabel("Wavelength [microns]")
-        ax.set_ylabel("Normalized Flux")
-
+        ax.set_xlabel(r"Wavelength [$\mu$m]")
+        ax.set_ylabel("Flux")
+        ax.set_title("Interpolated Spectra")
         fig.tight_layout()
         plt.show()
 
@@ -223,49 +177,168 @@ def interpolate_to_common_wavelength(
         amplitudes,
     )
 
-def reject_outliers(lambda_grid,spectra_grid): 
-    """ 
-    Performs outlier rejection based on median absolute deviation (MAD). 
+def reject_outliers(lambda_grid,
+                    spectra_grid, 
+                    sigma = 3.0, 
+                    plot = True, 
+                    save_path=None, 
+                    return_mask=False, 
+                    scale_mad=False):
+    # Specify wthe wavelength ranges 
+    helium_range = (1.0825, 1.0840)
+    paschen_range = (1.0935, 1.0947)
 
-    Parameters:
-    ------------
-    lambda_grid : np.ndarray
-        The common logarithmic wavelength grid.
-    spectra_grid : np.ndarray
-        The grid of spectra corresponding to the wavelength grid.
+    wavelength = np.asarray(lambda_grid)
+    spectra = np.asarray(spectra_grid, dtype=float)
 
-    Returns:
-    ------------
-    filtered_spectra_grid : np.ndarray
-        The spectra grid with outliers removed based on MAD.
+    if spectra.ndim !=2: 
+        raise ValueError("spectra_grid must be a 2D array")
+
+    if spectra.shape[1] != len(wavelength): 
+        raise ValueError("Wavelength grid and spectra have incompatible dimensions")
+
+    if sigma <= 0:
+        raise ValueError("sigma must be positive")
+
+    # Calcualte temporal median and MAD 
+    with np.errstate(invalid='ignore'):
+        median_spectrum = np.nanmedian(spectra, axis=0)
+        mad = median_abs_deviation(spectra, axis=0, nan_policy='omit', scale = "normal" if scale_mad else 1.0)
+
+    # Identify outliers
+    valid_mad = np.isfinite(mad) & (mad > 0)
+    outlier_mask = np.abs(spectra - median_spectrum) > (sigma * mad[None, :])
+    outlier_mask &= valid_mad[None, :]
+
+    filtered_spectra = spectra.copy()
+
+    replacement = np.broadcast_to(median_spectrum, spectra.shape)
+    filtered_spectra[outlier_mask] = replacement[outlier_mask] 
+
+    # count the number of rejected points 
+    num_rejected = np.count_nonzero(outlier_mask)
+    print(f"Rejected {num_rejected} pixels")
+
+    if plot or save_path is not None:
+
+        fig, axes = plt.subplots(
+            1, 2,
+            figsize=(14, 4),
+            dpi=300,
+        )
+
+        regions = [
+            (axes[0], helium_range, "Helium Line"),
+            (axes[1], paschen_range, "Paschen Line"),
+        ]
+
+        for ax, region, title in regions:
+
+            mask = (
+                (wavelength >= region[0])
+                & (wavelength <= region[1])
+            )
+
+            if not np.any(mask):
+                ax.text(
+                    0.5, 0.5,
+                    "No wavelength coverage",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
+                )
+            else:
+                for spectrum in filtered_spectra:
+                    ax.plot(
+                        wavelength[mask],
+                        spectrum[mask],
+                        alpha=0.7,
+                    )
+
+            ax.set_xlim(*region)
+            ax.set_xlabel(r"Wavelength [$\mu$m]")
+            ax.set_ylabel("Flux")
+            ax.set_title(title)
+            ax.grid(alpha=0.2)
+
+        # Helium triplet
+        for line in TRIPLET_LINES:
+            axes[0].axvline(
+                line,
+                color="red",
+                linestyle="--",
+                alpha=0.7,
+            )
+
+        # Paschen-gamma
+        for line in PASCHEN_LINES:
+            axes[1].axvline(
+                line,
+                color="red",
+                linestyle="--",
+                alpha=0.7,
+            )
+
+        fig.tight_layout()
+
+        if save_path is not None:
+            save_path = Path(save_path)
+            save_path.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+            fig.savefig(save_path, dpi=300)
+
+        if plot:
+            plt.show()
+
+        plt.close(fig)
+
+    # IMPORTANT: return statements outside plotting block
+    if return_mask:
+        return filtered_spectra, outlier_mask
+
+    return filtered_spectra
+
+def assess_SNR(lambda_grid,
+               spectra_grid, 
+               error_grid,
+               *, 
+               plot=True, 
+               save_path=None, 
+               helium_range=(1.0825, 1.0840),
+               paschen_range=(1.0935, 1.0947)): 
+    """
+    Calculate the SNR of the spectra.
+    Computed by the taking the ratio of flux/error at the center of the He Triplet component and Paschen-gamma.
+
+    Parameters
+    ----------
+    lambda_grid : array-like
+        Wavelength grid of the spectra.
+    spectra_grid : array-like
+        Flux values of the spectra.
+    error_grid : array-like
+        Error values corresponding to the spectra.
+    plot : bool, optional
+        Whether to plot the spectra and SNR, by default True.
+    save_path : str or Path, optional
+        Path to save the plot, by default None.
+    helium_range : tuple, optional
+        Wavelength range for the Helium triplet, by default (1.0825, 1.0840).
+    paschen_range : tuple, optional
+        Wavelength range for the Paschen-gamma line, by default (1.0935, 1.0947).
+
+    Returns
+    -------
+    snr_he : array-like
+        SNR values for the Helium triplet.
+    snr_paschen : array-like
+        SNR values for the Paschen-gamma line.
     """
 
-    # Instatntiate figure
-    fig, ax = plt.subplots(figsize=(10,4))
-    fig.suptitle('Spectra (Outlier rejected)')
+    wavelength = np.asarray(lambda_grid, dtype=float)
+    flux = np.asarray(spectra_grid, dtype=float)
+    error = np.asarray(error_grid, dtype=float)
 
-    ax.set_ylabel('Normalized Flux')
-    ax.set_xlabel('Wavelength [microns]')
-
-    # Perform outlier rejection
-    for c in range(spectra_grid.shape[1]):
-        data = spectra_grid[:,c]
-        mad = median_abs_deviation(data)
-        sigmas = (data - np.median(data)) / mad
-        outliers = np.abs(sigmas) > 5
-        data[outliers] = np.median(data)
-        
-    for row in spectra_grid:
-        ax.plot(lambda_grid, row)
-    
-    ax.axvline(He_line1, color='r', linestyle='--', alpha = 0.5)
-    ax.axvline(He_line2, color='r', linestyle='--', alpha = 0.5)
-    ax.axvline(He_line3, color='r', linestyle='--', alpha = 0.5)
-
-    #Grey around the region 
-    ax.axvspan(He_line2 - width/2, He_line2 + width/2, color='grey', alpha=0.3, label='Region of Interest')
-
-
-    plt.savefig(f"{analysis_output}/{NAME}_{DATE}_rejected_outliers.png", dpi=600)
-    plt.show()
-    plt.close()
+    # Checks for consistency
